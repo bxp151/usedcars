@@ -13,6 +13,8 @@ IN_FILE = '/latlon.csv.zip'
 OUT_FILE = '/vin_description.csv'
 OUT_FILE2 = '/vin_description2.csv'
 OUT_FILE3 = '/unlabeled_desciptions.csv.zip'
+OUT_FILE4 = '/full.csv'
+IN_FILE2 = '/seller.csv'
 random_seed = 42
     
 pd.set_option('display.expand_frame_repr', False)
@@ -44,4 +46,11 @@ ss.to_csv(DATA_DIR + OUT_FILE2, index = False)
 df[['description']].to_csv(DATA_DIR + OUT_FILE3, index = False, compression='zip')
 
 #%% Import labeled descriptions and append to df, then export
-z=pd.read_csv('/Users/bxp151/Downloads/seller.csv')
+
+ll = pd.read_csv(PROC_DIR + IN_FILE, compression='zip')
+lb = pd.read_csv(DATA_DIR + IN_FILE2)
+
+# drop the description here as it takes up a lot of storage
+full = lb.merge(ll, left_index=True, right_index=True).drop('description', axis=1)
+
+full.to_csv(PROC_DIR + OUT_FILE4)
