@@ -66,4 +66,21 @@ The overall approach to building the default prediction model:
 
 ## Data Definitions
 
-...[](https://huggingface.co/transformers/model_doc/distilbert.html)
+Variable | Description 
+---- | ----------- 
+seller | type of seller (dealer/private)
+bodyclass | style of body
+displacementcc | the size of the engine in cubic centimeters
+fueltypeprimary | the fuel type
+make | the manufacturer (eg. Honda)
+model | the  model (eg. Accord)
+modelyear | the model year
+posting_date | the date the ad was posted
+price (target) | the seller's price 
+condition | the car's condition
+cylinders | the number of cylinders
+size | the size category (eg. compact)
+paint_color | the exterior color 
+odometer | number of miles
+lat | ad region's lattitude 
+lon | ad region's longitude

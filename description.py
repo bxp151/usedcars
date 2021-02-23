@@ -53,4 +53,6 @@ lb = pd.read_csv(DATA_DIR + IN_FILE2)
 # drop the description here as it takes up a lot of storage
 full = lb.merge(ll, left_index=True, right_index=True).drop('description', axis=1)
 
-full.to_csv(PROC_DIR + OUT_FILE4)
+full = full.rename(columns={'dealer':'seller'})
+
+full.to_csv(PROC_DIR + OUT_FILE4, index=False)
