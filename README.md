@@ -5,9 +5,7 @@
 
 The objective is to predict prices for passenger vehicles on craigslist.
 
-The [initial data set](https://www.kaggle.com/austinreese/craigslist-carstrucks-data) includes every used vehicle posted for sale in United States on Craigslist from October 23, 2020 to December 3, 2020.  I utilized [NHTSA's VIN decoder API](https://vpic.nhtsa.dot.gov/api/) to capture verifiable information about each vehicle and combined it with the initial data set.  I then used [Google's Geocoding API](https://developers.google.com/maps/documentation/geocoding/overview) to retrieve latitude and longitude numbers based on the region URLs.  
-
-I'm currently working on building a text classifier using [DistilBERT](https://huggingface.co/transformers/model_doc/distilbert.html) to classify each sale as either private or dealer based on the description.   This classification is typically a signal for price differentiation. 
+The [initial data set](https://www.kaggle.com/austinreese/craigslist-carstrucks-data) includes every used vehicle posted for sale in United States on Craigslist from October 23, 2020 to December 3, 2020.  I utilized [NHTSA's VIN decoder API](https://vpic.nhtsa.dot.gov/api/) to capture verifiable information about each vehicle and combined it with the initial data set.  I then used [Google's Geocoding API](https://developers.google.com/maps/documentation/geocoding/overview) to retrieve latitude and longitude numbers based on the region URLs.  I also trained two text classifiers using [DistilBERT](https://huggingface.co/transformers/model_doc/distilbert.html) and [Google BERT](https://huggingface.co/transformers/model_doc/bert.html) to classify each sale as either private or dealer based on the seller description.
 
 <br>
 
