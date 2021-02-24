@@ -101,28 +101,58 @@ fig3 = px.histogram(test, x='price')
 plot(fig3)
 
 #%% EDA
-et.peek(train)
-et.explore(train)
 
-train['age'] = 2020 - train['modelyear']
-train.drop('modelyear', axis=1, inplace=True)
+tr = train.copy()
+
+# et.peek(tr)
+# et.explore(tr)
 
 ''' 
-Numeric Features 
+Initial Feature Engineering:
+    1. calculate age based off model year and drop modelyear
+    2. Impute 'missing' for condition, paint_color, size(temp)
+    3. Temporarity imput 'missing' for size for anlysis
+'''
+tr['age'] = 2021 - tr['modelyear']
+tr.drop('modelyear', axis=1, inplace=True)
+tr.loc[tr['condition'].isna(), 'condition'] = 'missing'
+tr.loc[tr['paint_color'].isna(), 'paint_color'] = 'missing'
+tr.loc[tr['size'].isna(), 'size'] = 'missing'
+          
+
+
+tr.hist()
+fig4 = px.histogram(tr, 'odometer')
+plot(fig4)
+tr.describe()
+et.skewstats(tr)
+# pd.plotting.scatter_matrix(tr.drop(['lat','lon'], axis=1), alpha=0.2) 
+pd.plotting.scatter_matrix(tr, alpha=0.2) 
+
+''' 
+Numeric feature notes 
     1. most cars engines are under 3 liters
     2. most cars are 10 years or younger
     3. most cars have under 200K miles
+    4. positive relationship between displacement & price
+    5. negative relationship bewteen age & price
 '''
 
-train.hist()
-fig4 = px.histogram(train, 'odometer')
-plot(fig4)
-train.describe()
-et.skewstats(train)
-pd.plotting.scatter_matrix(train, alpha=0.2)
 
+
+cat_cols = tr.select_dtypes('object').columns
+
+for col in cat_cols[0:4]:
+    print(tr[col].value_counts())
+    
+model = tr[cat_cols[4]].value_counts()
+model.head(10)
+
+for col in cat_cols[5:]:
+    print(tr[col].value_counts())
+    
 '''
-Categorical Features
+Categorical feature notes (univariate)
 
     1 Top 5 models
         Civic      1333
@@ -155,21 +185,44 @@ Categorical Features
         good          7764
         like new      1507
         
-    6 For all missing values, impute "missing"
-    
+'''
+
+
+# Categorical Box plots
+for col in cat_cols:
+    plot(px.box(tr, x =col, y = 'price'))
+
+'''
+Categorical feature (bivariate)
+
+    1. Yellow and orange seem to be more expensive than other colors, possibly
+    because those are more likely to be on exotic cars
+    2. There is overlap but dealer seem to be more expensive than private 
+    3. Coupes and convertibles make up most of the very high priced cars
+    4. There are makes amd models that are much more expensive than average
+    5. Cars listed as fair or salvage are significantly different in price 
+    (lower)
+    6. Size has many missing values and none of the categories seems to be 
+    very different - maybe not include
 
 '''
 
-cat_cols = train.select_dtypes('object').columns
+# create scatter plot of locations and prices
 
-for col in cat_cols[0:4]:
-    print(train[col].value_counts())
+loc_prices = tr[['lat','lon','price']].sort_values(['lat', 'lon']).groupby\
+    (['lat', 'lon']).mean().reset_index().\
+        rename(columns = {'price':'avg_price'})
+        
+loc_prices = tr[['lat','lon','price']].\
+             sort_values(['lat', 'lon']).\
+             groupby(['lat', 'lon']).\
+             agg(avg_price=('price', 'mean'),count=('price','count')).\
+             reset_index()
     
-model = train[cat_cols[4]].value_counts()
-model.head(10)
+    
+# how to color with count
+plot(px.scatter(loc_prices, 'lon', 'lat', size = 'avg_price'))
 
-for col in cat_cols[5:]:
-    print(train[col].value_counts())
 
 
 
