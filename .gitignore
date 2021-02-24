@@ -9,6 +9,7 @@ __pycache__/
 # Data
 **/data
 **/=hidden
+*.html
 
 # C extensions
 *.so
