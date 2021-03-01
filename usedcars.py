@@ -5,7 +5,14 @@ import exploretransform as et
 import numpy as np
 import plotly.express as px
 from plotly.offline import plot 
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import LinearRegression, Lasso, GammaRegressor
+import xgboost as xgb
+import category_encoders as ce
+
 
 #%% Settings
 HOME_DIR = '/Users/bxp151/ml/usedcars'
@@ -53,10 +60,11 @@ such as Ferarri, Lamborghini, Rolls Royce
 #%% Initial cleanup
 
 def init_clean(df):
-    drop = ['vin','vehicletype','state','region','region_url','type',
+    drop = ['vin','vehicletype','state','region_url','type',
         'image_url','title_status', 'cylinders', 'posting_date']
     df = df.drop(drop, axis = 1)
-    df[['modelyear', 'odometer']] = df[['modelyear', 'odometer']].astype(int)
+    df[['modelyear', 'odometer','displacementcc']] =\
+        df[['modelyear', 'odometer', 'displacementcc']].astype(int)
     return df
 
 df = init_clean(df)
@@ -207,22 +215,132 @@ Categorical feature (bivariate)
 
 '''
 
-# create scatter plot of locations and prices
-
-loc_prices = tr[['lat','lon','price']].sort_values(['lat', 'lon']).groupby\
-    (['lat', 'lon']).mean().reset_index().\
-        rename(columns = {'price':'avg_price'})
-        
-loc_prices = tr[['lat','lon','price']].\
-             sort_values(['lat', 'lon']).\
-             groupby(['lat', 'lon']).\
+# create dataframe to map average prices and counts        
+loc_prices = tr[['lat','lon','region','price']].\
+             sort_values(['lat', 'lon', 'region']).\
+             groupby(['lat', 'lon', 'region']).\
              agg(avg_price=('price', 'mean'),count=('price','count')).\
-             reset_index()
+             reset_index().sort_values('avg_price', ascending=False)
     
-    
-# how to color with count
-plot(px.scatter(loc_prices, 'lon', 'lat', size = 'avg_price'))
+loc_prices[loc_prices['count'] > 300].drop(['lat', 'lon'], axis = 1).head(5)
 
+plot(px.scatter_mapbox(loc_prices, lat = 'lat', lon='lon', 
+                       size='count',
+                       color='avg_price',
+                       color_continuous_scale=px.colors.cyclical.IceFire,
+                       mapbox_style='open-street-map',
+                       zoom = 2))
+
+'''
+Top 5 highest average prices with post count > 300
+    1. San Fran
+    2. Hawaii
+    3. San Diego
+    4. Stockton
+    5, Anchorage
+'''
+
+
+''' function to perform feature engineering steps for train/test '''
+def feat_eng(df):
+    df = df.copy()
+    df['age'] = 2021 - df['modelyear']
+    df.drop(['modelyear','region'], axis=1, inplace=True)
+    df.loc[df['condition'].isna(), 'condition'] = 'missing'
+    df.loc[df['paint_color'].isna(), 'paint_color'] = 'missing'
+    df.loc[df['size'].isna(), 'size'] = 'missing'
+    return df
+
+
+# validate final transformation 
+et.explore(feat_eng(train))
+et.peek(feat_eng(train))
+
+#%% Pipelines
+'''
+Linear, GLM, Penalized
+-Center/Scale numeric
+
+Random Forest, Adaboost, Gradient Boost, XGBoost
+
+All
+-LOO Target encoding
+
+'''
+
+X_train, y_train = feat_eng(train).drop('price', axis = 1), feat_eng(train)['price']
+
+num_cols = X_train.select_dtypes('number').columns
+cat_cols = X_train.select_dtypes('object').columns
+
+''' For non-parametric models '''
+num_pipe1 = Pipeline([
+    ('select', et.ColumnSelect(num_cols))
+    ])
+
+cat_pipe1 = Pipeline([
+    ('select', et.ColumnSelect(cat_cols)),
+    ('loo', ce.LeaveOneOutEncoder(sigma=0.05))
+    ])
+
+union1 = FeatureUnion([
+    ('num_pipe1', num_pipe1),
+    ('cat_pipe', cat_pipe1)
+    ])
+
+''' For parametric models '''
+num_pipe2 = Pipeline([
+    ('select', et.ColumnSelect(num_cols)),
+    ('scaler', StandardScaler() )
+    ])
+
+cat_pipe2 = Pipeline([
+    ('select', et.ColumnSelect(cat_cols)),
+    ('loo', ce.LeaveOneOutEncoder(sigma=0.05)),
+    ('scaler', StandardScaler() )
+    ])
+
+union2 = FeatureUnion([
+    ('num_pipe2', num_pipe2),
+    ('cat_pipe', cat_pipe2)
+    ])
+
+
+#%% Cross validator
+
+def cv_score(estimator, pipeline):
+    return np.abs(np.mean(cross_val_score(\
+                   estimator,
+                   pipeline.fit_transform(X_train, y_train), 
+                   y_train, 
+                   cv = 5, 
+                   scoring = 'neg_root_mean_squared_error')))
+
+
+#%% Baseline Models
+
+''' Naive '''
+# Predict mean
+base00 = np.sqrt(np.sum((y_train - np.mean(y_train))**2)/len(y_train))
+
+''' Parametric '''
+
+# Linear Regression 
+base01 = cv_score(LinearRegression(), union2)
+
+# Lasso 
+base02 = cv_score(Lasso(), union2)
+
+''' Non-Parametric '''
+
+# Random Forest
+base03 = cv_score(RandomForestRegressor(max_features='sqrt', random_state=42), union1)
+
+# Gradient Boost
+base04 = cv_score(GradientBoostingRegressor(random_state=42), union1)
+
+# XGBoost
+base05 = cv_score(xgb.XGBRegressor(random_state=42), union1)
 
 
 
