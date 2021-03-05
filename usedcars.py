@@ -5,11 +5,14 @@ import exploretransform as et
 import numpy as np
 import plotly.express as px
 from plotly.offline import plot 
-from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score
+from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score,\
+    KFold, RandomizedSearchCV
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import LinearRegression, Lasso, GammaRegressor
+from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.metrics import mean_squared_error
+from sklearn.inspection import permutation_importance
 import xgboost as xgb
 import category_encoders as ce
 
@@ -65,6 +68,7 @@ def init_clean(df):
     df = df.drop(drop, axis = 1)
     df[['modelyear', 'odometer','displacementcc']] =\
         df[['modelyear', 'odometer', 'displacementcc']].astype(int)
+    df['seller'] = df['seller'].fillna('dealer')
     return df
 
 df = init_clean(df)
@@ -112,8 +116,8 @@ plot(fig3)
 
 tr = train.copy()
 
-# et.peek(tr)
-# et.explore(tr)
+et.peek(tr)
+et.explore(tr)
 
 ''' 
 Initial Feature Engineering:
@@ -134,7 +138,6 @@ fig4 = px.histogram(tr, 'odometer')
 plot(fig4)
 tr.describe()
 et.skewstats(tr)
-# pd.plotting.scatter_matrix(tr.drop(['lat','lon'], axis=1), alpha=0.2) 
 pd.plotting.scatter_matrix(tr, alpha=0.2) 
 
 ''' 
@@ -344,3 +347,194 @@ base05 = cv_score(xgb.XGBRegressor(random_state=42), union1)
 
 
 
+#%% Tuning RF
+
+
+# tuning params
+rf_params = {'max_features': [3,5,7,9,11],
+             'n_estimators': [100,200,400,800,1600]}
+
+# cross validation folds
+inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
+outer_cv = KFold(n_splits=5, shuffle=True, random_state=42)
+
+
+inner = RandomizedSearchCV(RandomForestRegressor(random_state=42),
+                            rf_params,
+                            n_iter=10,
+                            scoring='neg_root_mean_squared_error',
+                            refit=True,
+                            cv=inner_cv,
+                            random_state=42)
+                               
+
+outer = cross_val_score(inner, 
+                        union1.fit_transform(X_train, y_train),
+                        y_train,
+                        cv=outer_cv)
+
+rf_rmse = np.mean(-outer)
+
+
+
+#%% Fit final model
+
+inner.fit(union1.fit_transform(X_train, y_train), y_train)
+
+inner.best_params_
+
+best_model = inner.best_estimator_
+
+X_test, y_test = feat_eng(test).drop('price', axis = 1), feat_eng(test)['price']
+y_hat = best_model.predict(union1.transform(X_test))
+
+test_rmse = mean_squared_error(y_test, y_hat, squared=False)
+
+#%% Determine Feature Importance and plot top 5
+
+pi = permutation_importance(best_model, 
+                            union1.transform(X_test), 
+                            y_test, 
+                            n_repeats = 100,
+                            random_state=42)
+
+
+fi = pd.DataFrame({"features": X_test.columns,
+                   "importance": pi.importances_mean,
+                   "std" : pi.importances_std}).sort_values \
+                    ("importance",ascending=False)
+                    
+        
+
+top_feat = fi.iloc[0:10,0:2].sort_values("importance")
+
+fig5 = px.bar(top_feat, 
+              x="importance",
+              y="features", 
+              title = "Top 10 Features",
+              orientation="h",
+              labels=dict(features=""))
+
+plot(fig5)
+fig5.write_image(IMG_DIR + "/fig5.png")
+
+#%%
+def target_shuffling(estimator, trainX, trainY, n_iters, scorefunc, 
+                     random_state=0, verbose = False):
+    '''
+    Model agnostic tehcnique invented by John Elder of Elder Research.  The
+    results show the probability that the model's results occured by chance
+    (p-value)
+    
+    For n_iters:
+        
+        1. Shuffle the target 
+        2. Fit unshuffled input to shuffled target using estimator 
+        3. Make predictions using unshuffled inputs
+        4. Score predictions against shuffled target using scoring function
+        5. Store and return predictions 
+    
+    The distribtuion of scores can be used to plot a histogram in order to 
+    determine p-value
+        
+    Parameters
+    ----------
+    estimator: object
+        A final model estimator that will be evaluated
+
+    trainX : {array-like, sparse matrix} of shape (n_samples, n_features)
+        The training input samples.
+  
+    trainY : array-like of shape (n_samples,)
+        The training target
+            
+    n_iters : int
+        The number of times to shuffle, refit and score model.
+        
+    scorefun : function
+        The scoring function. For example mean_squared_error() 
+        
+    random_state : int, default = None
+        Controls the randomness of the target shuffling. Set for repeatable
+        results  
+    
+    verbose : boolean, default = False
+        The scoring function. For example sklearn.metrics.mean_squared_error() 
+        
+    Returns
+    -------
+    scores : array of shape (n_iters)
+        These are scores calculated for each shuffle
+
+    '''
+ 
+    for i in range(n_iters):    
+        
+        # 1. Shuffle the training target 
+        np.random.default_rng(seed = random_state).shuffle(trainY)
+        random_state += 1
+
+        # 2. Fit unshuffled input to shuffled target using estimator
+        estimator.fit(trainX, trainY)
+        
+        # calculate feature importance using permutation
+        
+        # 3. Make predictions using unshuffled inputs
+        y_hat = estimator.predict(trainX)
+        
+        # 4. Score predictions against shuffled target using scoring function
+        score = scorefunc(trainY, y_hat, squared=False)
+        
+        # 5. Store and return predictions 
+        if i == 0:
+            allscores = np.array(score)
+        else:
+            allscores = np.append(allscores, score)
+        
+        if verbose:
+            print("Shuffle: " + str(i+1) + "\t\tScore: " + str(score))
+    
+    return allscores
+
+inner.best_params_['random_state'] = 42
+estimator = RandomForestRegressor(**inner.best_params_)
+
+scores = target_shuffling(estimator = estimator,
+                           trainX = union1.transform(X_train), 
+                           trainY = np.array(y_train), 
+                           n_iters=400, 
+                           random_state=0,
+                           verbose=True,
+                           scorefunc=mean_squared_error)
+
+
+#%% Plot target shuffling result
+
+fig6 = px.histogram(pd.DataFrame(scores, columns=["RMSE"]), x = "RMSE")
+
+fig6.add_vline(x=rf_rmse, line_dash = "dash")
+fig6.update_layout(xaxis_range=[4000,4800], yaxis_range=[0,55])
+
+
+fig6.add_annotation(x=rf_rmse, y=52.5,
+            text="Best Model",
+            showarrow=False,
+            yshift=5,
+            xshift=-50,
+            font=dict(
+                size=16
+                ))
+
+fig6.add_annotation(x=4600, y=52.5,
+            text="Shuffled Models",
+            showarrow=False,
+            yshift=5,
+            font=dict(
+                size=16
+                ))
+
+plot(fig6)
+fig6.write_image(IMG_DIR + "/fig6.png")
+
+
+             

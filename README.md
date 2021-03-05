@@ -21,11 +21,15 @@ The executive summary is located in [REPORT.md](./REPORT.md)
 
 1. Clone the repository: `git clone https://github.com/bxp151/usedcars.git` 
 2. Install the required packages: `pip install -r requirements.txt `
-3. **OPTIONAL**: Run preprocessing code (this step takes 4-5 hours to complete).  This code connects to the NHTSA VIN decoder API to capture vehicle information. The output from this step is `/processed/combined.csv.zip` and is included as part of the repository    
+3. From here you skip 4-6 and jump right to step 7
+4. **OPTIONAL**: (this step takes 4-5 hours to complete).  This code connects to the NHTSA VIN decoder API to capture vehicle information. The output from this step is `/processed/nhtsa.csv.zip` and is included as part of the repository    
 	* Open `nhtsa.py` and set `HOME_DIR` to the directory path where you cloned the repository
 	* Run `nhtsa.py`
-	
-4. The following steps are **in-progress** and will be updated as they are completed
-	* populate lat/lon for reigons using API
-	* classification model for descriptions (private / dealer)
-	
+5. **OPTIONAL**: (this step takes ~20 mins to complete and requires a google API key).  This code connects to the Google Geocoding API to get the lattitue and longitude of each Craigslist server. The output from this step is `/processed/latlon.csv.zip` and is included as part of the repository    
+	* Open `latlon.py` and set `HOME_DIR` to the directory path where you cloned the repository
+	* Run `latlon.py`
+6. **OPTIONAL**: (this step take 4-8 hours to complete and requires a google account). This code creates a feature "seller" based on manually labeling a sample of the training data as either "private" or "dealer" based on the description.  The output from this step is `seller.csv` which is manually downloaded from Google Collab.  This file should be moved in the the `/data` directory.
+   * Run `description.py` to see how the sample of training data was taken
+	* Take a copy of the [collab notebooks](https://drive.google.com/drive/folders/1zt6PbSovX9jnWfoiHMly1FxGiFGzSazz?usp=sharing) 
+	* Run the distilbert first then the bert notebook
+7. Finally, run `usedcars.py`

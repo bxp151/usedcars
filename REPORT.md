@@ -24,15 +24,34 @@ In order to measure the effectiveness of the model in predicting car prices, we 
 
 ## Key Findings
 
-1. ...
-2. ...
+1. The final model achieved an RMSE of $4100.00 on the test data 
+2. The 5 most important features used to predict price were:
 
+	* **bodyclass --**  style of body (e.g. sedan)
+	* **odometer --** number of miles 
+	* **make --** manufacturer (e.g Honda)
+	* **paint_color --** exterior color
+	* **seller --** seller type (private, dealer)
+
+![](./images/fig5.png)
 
 
 
 
 ## Model Validation
-...
+In order to validate the model, we used target shuffling which shows the probability that the model's results occured by chance. 
+    
+    For 400 repititions:
+        
+        1. Shuffle the target 
+        2. Fit the best model to the shuffled target (shuffled model)
+        3. Make predictions using the shuffled model and score using AUC
+        4. Plot the distribution of scores 
+</br>
+
+Since the best model performed better than every target permutation model, there is a 0 in 400 probability that the model's results occured by chance
+
+![](./images/fig6.png)
 
 
 ## Approach
@@ -43,6 +62,7 @@ The overall approach to building the default prediction model:
 	* Initial data exploration
 	* Collect decoded VIN information from  NHTSA's API
 	* Combine initial data with decoded VIN information
+	* Build text classifier to populate "seller" feature (private vs. dealer) based on description feature
 2. Secondary data exploration
 3. Split data into Train/Test
 4. Build and analyze baseline models
@@ -55,7 +75,9 @@ The overall approach to building the default prediction model:
 
 ## Potential Model Improvements
 
-...
+1. An attempt was made to collect vehicle manufacturer suggested retail prices (MSRPs) for each observation.  Unfortunately, there were no freely available sources of that information.  I think that this feature would have improved predictions significantly.  
+2. There is oppporutnity to reduce the # of features included in the model since most featuers outside of the top 5 were unimportant
+
 
 <br>
 <br>
@@ -82,3 +104,4 @@ paint_color | the exterior color
 odometer | number of miles
 lat | ad region's lattitude 
 lon | ad region's longitude
+seller | seller type (private, dealer)
